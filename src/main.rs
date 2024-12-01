@@ -34,6 +34,7 @@ fn main() {
                 AocError::ClientFieldMissing(..) => USAGE_ERROR,
                 AocError::InvalidPuzzlePart => USAGE_ERROR,
                 AocError::InvalidOutputWidth => USAGE_ERROR,
+                AocError::HtmlError(..) => FAILURE,
             };
 
             if exit_code == FAILURE {

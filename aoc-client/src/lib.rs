@@ -2,10 +2,10 @@ use chrono::{DateTime, Datelike, FixedOffset, NaiveDate, TimeZone, Utc};
 use colored::{Color, Colorize};
 use dirs::{config_dir, home_dir};
 use html2md::parse_html;
-use html2text::render::text_renderer::RichAnnotation;
+use html2text::render::RichAnnotation;
 use html2text::{
     from_read, from_read_with_decorator,
-    render::text_renderer::TrivialDecorator,
+    render::TrivialDecorator,
 };
 use http::StatusCode;
 use log::{debug, info, warn};
@@ -125,6 +125,9 @@ pub enum AocError {
 
     #[error("Output width must be greater than zero")]
     InvalidOutputWidth,
+
+    #[error("HTML error {0}")]
+    HtmlError(#[source] html2text::Error),
 }
 
 pub struct AocClient {
@@ -295,13 +298,13 @@ impl AocClient {
         D: Display,
     {
         let outcome_html = self.submit_answer_html(puzzle_part, answer)?;
-        println!("\n{}", self.html2text(&outcome_html));
+        println!("\n{}", self.html2text(&outcome_html)?);
         Ok(())
     }
 
     pub fn show_puzzle(&self) -> AocResult<()> {
         let puzzle_html = self.get_puzzle_html()?;
-        println!("\n{}", self.html2text(&puzzle_html));
+        println!("\n{}", self.html2text(&puzzle_html)?);
         Ok(())
     }
 
@@ -437,19 +440,21 @@ impl AocClient {
                 // The 2023 calendar has some lava animation using.
                 // position:absolute spans.  Hide them here.
                 .use_doc_css()
-                .add_css(AOC_CALENDAR_CSS_WORKAROUND)
+                .add_css(AOC_CALENDAR_CSS_WORKAROUND).expect("Invalid CSS")
                 .coloured(
                     calendar_html.as_bytes(),
                     self.output_width,
                     AocClient::colour_map
-                    ).unwrap()
+                    )
+                .map_err(AocError::HtmlError)?
         } else {
             html2text::config::with_decorator(TrivialDecorator::new())
-                .add_css(AOC_CALENDAR_CSS_WORKAROUND)
+                .add_css(AOC_CALENDAR_CSS_WORKAROUND).expect("Invalid CSS")
                 .string_from_read(
                     calendar_html.as_bytes(),
                     self.output_width
-                    ).unwrap()
+                    )
+                .map_err(AocError::HtmlError)?
         };
         println!("\n{calendar_text}");
         Ok(())
@@ -544,15 +549,16 @@ impl AocClient {
         Ok(())
     }
 
-    fn html2text(&self, html: &str) -> String {
+    fn html2text(&self, html: &str) -> AocResult<String> {
         if self.show_html_markup {
             from_read(html.as_bytes(), self.output_width)
+                .map_err(AocError::HtmlError)
         } else {
             from_read_with_decorator(
                 html.as_bytes(),
                 self.output_width,
-                TrivialDecorator::new(),
-            )
+                TrivialDecorator::new())
+                .map_err(AocError::HtmlError)
         }
     }
 }
